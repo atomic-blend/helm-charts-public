@@ -1,0 +1,15 @@
+{{- range $serviceName, $serviceConfig := .Values.services }}
+{{- $root := $ }}
+{{- if ($serviceConfig.pdb).enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $serviceName }}
+spec:
+  maxUnavailable: {{ $serviceConfig.pdb.maxUnavailable }}
+  selector:
+    matchLabels:
+      {{- include "atomic-blend-component.selectorLabels" (dict "serviceName" $serviceName "Values" $root.Values "Chart" $root.Chart "Release" $root.Release) | nindent 6 }}
+{{- end }}
+{{- end }}

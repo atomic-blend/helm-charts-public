@@ -1,0 +1,29 @@
+suite: Test ab-component Deployments
+templates:
+  - deployment.yaml
+tests:
+  - it: should render a Deployment for each service in the map
+    set:
+      services:
+        backend:
+          env: dev
+          deployment:
+            replicas: 2
+            image: "ghcr.io/atomic-blend/backend"
+            imagePullPolicy: IfNotPresent
+            imagePullSecrets: []
+      manifest:
+        backend:
+          version: "1.0.0"
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: metadata.name
+          value: backend
+      - equal:
+          path: spec.replicas
+          value: 2
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: ghcr.io/atomic-blend/backend:1.0.0 

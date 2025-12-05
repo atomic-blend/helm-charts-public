@@ -1,0 +1,39 @@
+suite: Test ab-component Health Ingresses
+templates:
+  - ingress_health.yaml
+tests:
+  - it: should render a health Ingress for each service with ingress enabled
+    set:
+      services:
+        backend:
+          ingress:
+            enabled: true
+            ingressClassName: haproxy
+            hosts:
+              - host: api.example.com
+                secretName: backend-tls
+            prefixPaths:
+              - backend
+            service: backend
+            port: 80
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: metadata.name
+          value: backend-health
+      - equal:
+          path: spec.ingressClassName
+          value: haproxy
+      - equal:
+          path: spec.tls[0].hosts[0]
+          value: api.example.com
+      - equal:
+          path: spec.tls[0].secretName
+          value: backend-tls
+      - equal:
+          path: spec.rules[0].host
+          value: api.example.com
+      - equal:
+          path: spec.rules[0].http.paths[0].path
+          value: /backend/health 

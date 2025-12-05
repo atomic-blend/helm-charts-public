@@ -1,0 +1,74 @@
+suite: Test ab-component HPAs
+templates:
+  - hpa.yaml
+tests:
+  - it: should render an HPA with only CPU metric if only CPU is set
+    set:
+      services:
+        backend:
+          hpa:
+            enabled: true
+            minReplicas: 1
+            maxReplicas: 5
+            cpu:
+              averageUtilization: 80
+      manifest:
+        backend:
+          version: "1.0.0"
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: metadata.name
+          value: backend
+      - equal:
+          path: spec.minReplicas
+          value: 1
+      - equal:
+          path: spec.maxReplicas
+          value: 5
+      - equal:
+          path: spec.metrics[0].resource.name
+          value: cpu
+      - equal:
+          path: spec.metrics[0].resource.target.averageUtilization
+          value: 80
+  - it: should render an HPA with both CPU and memory metrics if both are set
+    set:
+      services:
+        backend:
+          hpa:
+            enabled: true
+            minReplicas: 2
+            maxReplicas: 10
+            cpu:
+              averageUtilization: 70
+            memory:
+              averageUtilization: 60
+      manifest:
+        backend:
+          version: "1.0.0"
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: metadata.name
+          value: backend
+      - equal:
+          path: spec.minReplicas
+          value: 2
+      - equal:
+          path: spec.maxReplicas
+          value: 10
+      - equal:
+          path: spec.metrics[0].resource.name
+          value: memory
+      - equal:
+          path: spec.metrics[0].resource.target.averageUtilization
+          value: 60
+      - equal:
+          path: spec.metrics[1].resource.name
+          value: cpu
+      - equal:
+          path: spec.metrics[1].resource.target.averageUtilization
+          value: 70 

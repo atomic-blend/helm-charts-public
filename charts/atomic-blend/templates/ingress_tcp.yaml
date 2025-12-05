@@ -1,0 +1,46 @@
+{{- range $serviceName, $serviceConfig := .Values.services }}
+{{- $root := $ }}
+{{ if ($serviceConfig.tcpIngress).enabled }}
+---
+apiVersion: ingress.v1.haproxy.org/v1
+kind: TCP
+metadata:
+  name: {{ $serviceName }}-tcp
+  labels:
+    {{- include "atomic-blend-component.labels" (dict "serviceName" $serviceName "Values" $root.Values "Chart" $root.Chart "Release" $root.Release) | nindent 4 }}
+  annotations:
+    ingress.class: haproxy
+    {{- if $serviceConfig.tcpIngress.annotations }}
+    {{- toYaml $serviceConfig.tcpIngress.annotations | nindent 4 }}
+    {{- end }}
+spec:
+  - name: {{ $serviceName }}-tcp
+    frontend:
+      name: {{ $serviceName }}-frontend
+      {{- if $serviceConfig.tcpIngress.tcplog }}
+      tcplog: {{ $serviceConfig.tcpIngress.tcplog }}
+      {{- else }}
+      tcplog: true
+      {{- end }}
+      binds:
+        {{- range $bind := $serviceConfig.tcpIngress.binds }}
+        - name: {{ $bind.name | default (printf "%s-bind" $serviceName) }}
+          port: {{ $bind.port }}
+          {{- if $bind.address }}
+          address: {{ $bind.address }}
+          {{- end }}
+          {{- if $bind.ssl }}
+          ssl: {{ $bind.ssl }}
+          {{- end }}
+          {{- if $bind.crt }}
+          ssl_certificate: {{ $bind.crt }}
+          {{- end }}
+          {{- if $bind.accept_proxy }}
+          accept_proxy: {{ $bind.accept_proxy }}
+          {{- end }}
+        {{- end }}
+    service:
+      name: {{ $serviceConfig.tcpIngress.service | default $serviceName }}
+      port: {{ $serviceConfig.tcpIngress.port | default 80 }}
+{{- end }}
+{{- end -}}

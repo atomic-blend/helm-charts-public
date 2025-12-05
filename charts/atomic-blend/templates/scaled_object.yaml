@@ -1,0 +1,30 @@
+{{- range $serviceName, $serviceConfig := .Values.services }}
+{{- $root := $ }}
+{{- if and ($serviceConfig.scaling) ($serviceConfig.scaling).enabled }}
+{{ $stackNamespace := $root.Values.stackNamespace }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ $serviceName }}
+  namespace: {{ $stackNamespace }}
+spec:
+  scaleTargetRef:
+    name: {{ $serviceName }}
+  minReplicaCount: {{ $serviceConfig.scaling.minReplicaCount }}
+  maxReplicaCount: {{ $serviceConfig.scaling.maxReplicaCount }}
+  triggers:
+    {{ if and ($serviceConfig.scaling.cpu) ($serviceConfig.scaling.cpu).enabled }}
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "{{ $serviceConfig.scaling.cpu.value }}"  # Target average CPU utilization percentage
+    {{- end }}
+    {{ if and ($serviceConfig.scaling.memory) ($serviceConfig.scaling.memory).enabled }}
+    - type: memory
+      metricType: Utilization
+      metadata:
+        value: "{{ $serviceConfig.scaling.memory.value }}"  # Target average memory utilization percentage
+    {{- end }}
+{{- end }}
+{{- end -}}

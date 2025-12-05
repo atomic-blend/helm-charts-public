@@ -1,0 +1,28 @@
+suite: Test ab-component ConfigMaps
+templates:
+  - cm.yaml
+tests:
+  - it: should render a ConfigMap for each service with cm enabled
+    set:
+      services:
+        backend:
+          cm:
+            enabled: true
+            values:
+              DATABASE_URL: "mongodb://localhost:27017"
+              ENV: "development"
+      manifest:
+        backend:
+          version: "1.0.0"
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: metadata.name
+          value: backend-cm
+      - equal:
+          path: data.DATABASE_URL
+          value: mongodb://localhost:27017
+      - equal:
+          path: data.ENV
+          value: development 
