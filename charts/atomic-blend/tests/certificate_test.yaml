@@ -1,0 +1,30 @@
+suite: Test ab-component Certificates
+templates:
+- certificate.yaml
+tests:
+- it: should render a Certificate for tcpIngress when certificate enabled
+  set:
+    services:
+      backend:
+        tcpIngress:
+          enabled: true
+          certificate:
+            enabled: true
+            dnsNames:
+            - example.com
+            secretName: backend-tcp-secret
+    manifest:
+      backend:
+        version: "1.0.0"
+  asserts:
+  - hasDocuments:
+      count: 1
+  - equal:
+      path: metadata.name
+      value: backend-tcp-tls
+  - equal:
+      path: spec.secretName
+      value: backend-tcp-secret
+  - equal:
+      path: spec.dnsNames[0]
+      value: example.com

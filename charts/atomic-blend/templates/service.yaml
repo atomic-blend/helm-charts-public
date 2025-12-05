@@ -1,0 +1,21 @@
+{{- range $serviceName, $serviceConfig := .Values.services }}
+{{- $root := $ }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "atomic-blend-component.labels" (dict "serviceName" $serviceName "Values" $root.Values "Chart" $root.Chart "Release" $root.Release) | nindent 4 }}
+spec:
+  type: {{ $serviceConfig.service.type }}
+  ports:
+    {{- range $port := $serviceConfig.service.ports }}
+    - port: {{ $port.port }}
+      targetPort: {{ $port.targetPort }}
+      protocol: {{ $port.protocol | default "TCP" }}
+      name: {{ $port.name | default "http" }}
+    {{- end }}
+  selector:
+    {{- include "atomic-blend-component.selectorLabels" (dict "serviceName" $serviceName "Values" $root.Values "Chart" $root.Chart "Release" $root.Release) | nindent 4 }}
+{{- end }}

@@ -1,0 +1,56 @@
+{{- range $serviceName, $serviceConfig := .Values.services }}
+{{- $root := $ }}
+{{ if ($serviceConfig.ingress).enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $serviceName }}
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-ssl-protocols: "TLSv1.3"
+    {{- if $serviceConfig.ingress.enableRewrite }}
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+    {{- end }}
+    {{- if $serviceConfig.ingress.enableCors }}
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    {{- end }}
+    {{- if $serviceConfig.ingress.annotations }}
+    {{- toYaml $serviceConfig.ingress.annotations | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ $serviceConfig.ingress.ingressClassName }}
+  {{- /* Generate TLS section from hosts */}}
+  tls:
+    {{- $tlsMap := dict }}
+    {{- range $host := $serviceConfig.ingress.hosts }}
+      {{- if $host.secretName }}
+        {{- if not (hasKey $tlsMap $host.secretName) }}
+          {{- $_ := set $tlsMap $host.secretName (list) }}
+        {{- end }}
+        {{- $_ := set $tlsMap $host.secretName (append (get $tlsMap $host.secretName) $host.host) }}
+      {{- end }}
+    {{- end }}
+    {{- range $secretName, $hosts := $tlsMap }}
+    - hosts:
+        {{- range $h := $hosts }}
+        - {{ $h }}
+        {{- end }}
+      secretName: {{ $secretName }}
+    {{- end }}
+  rules:
+    {{- range $host := $serviceConfig.ingress.hosts }}
+    - host: {{ $host.host }}
+      http:
+        paths:
+          {{- range $path := $serviceConfig.ingress.prefixPaths }}
+          - path: /{{ $path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $serviceConfig.ingress.service | default $serviceName }}
+                port:
+                  number: {{ $serviceConfig.ingress.port | default 80 }}
+          {{- end }}
+    {{- end }}
+{{- end }}
+{{- end -}}

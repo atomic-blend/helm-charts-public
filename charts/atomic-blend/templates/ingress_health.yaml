@@ -1,0 +1,35 @@
+{{- range $serviceName, $serviceConfig := .Values.services }}
+{{- if and ($serviceConfig.ingress.enabled) ($serviceConfig.ingress.hosts) ($serviceConfig.ingress.prefixPaths) }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ printf "%s-health" $serviceName }}
+  annotations:
+    haproxy.org/path-rewrite: /{{ $serviceName }}/(.*) /\1
+    {{- if $serviceConfig.ingress.annotations }}
+    {{- toYaml $serviceConfig.ingress.annotations | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ $serviceConfig.ingress.ingressClassName }}
+  tls:
+    {{- range $host := $serviceConfig.ingress.hosts }}
+    - hosts:
+        - {{ $host.host }}
+      secretName: {{ $host.secretName }}
+    {{- end }}
+  rules:
+    {{- range $host := $serviceConfig.ingress.hosts }}
+    - host: {{ $host.host }}
+      http:
+        paths:
+          - path: /{{ $serviceName }}/health
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $serviceConfig.ingress.service | default $serviceName }}
+                port:
+                  number: {{ $serviceConfig.ingress.port | default 80 }}
+    {{- end }}
+{{- end }}
+{{- end }} 

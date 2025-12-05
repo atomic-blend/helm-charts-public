@@ -1,0 +1,53 @@
+{{- range $serviceName, $serviceConfig := .Values.services }}
+{{- $root := $ }}
+{{- if $serviceConfig.cronjob -}}
+{{ $release := $root.Release}}
+{{ $manifest := $root.Values.manifest }}
+{{ $nodeSelector := $serviceConfig.deployment.nodeSelector }}
+{{ range $serviceConfig.cronjob }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $serviceName }}-{{ .name }}
+spec:
+  schedule: {{ quote .schedule }}
+  concurrencyPolicy: {{ .concurrencyPolicy }}
+  successfulJobsHistoryLimit: {{ .successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          {{- if $nodeSelector }}
+          nodeSelector:
+            {{- toYaml $nodeSelector | nindent 10 }}
+          {{- end }}
+          imagePullSecrets:
+            {{ toYaml .imagePullSecrets | nindent 12 }}
+          restartPolicy: {{ .restartPolicy }}
+          terminationGracePeriodSeconds: {{ .terminationGracePeriodSeconds }}
+          containers:
+          - name: {{ $serviceName }}-{{ .name }}
+            image: {{ .image }}:{{ (index $manifest $serviceName).version }}
+            imagePullPolicy: {{ .imagePullPolicy }}
+            {{- if or (.cm).enabled (.secrets).enabled }}
+            envFrom:
+            {{- if (.cm).enabled }}
+            - configMapRef:
+                name: {{ $serviceName }}-cm
+            {{- end }}
+            {{- if (.secrets).enabled }}
+            - secretRef:
+                name: {{ $serviceName }}-secret
+            {{- end }}
+            {{- end }}
+            {{ if .env }}
+            env:
+              {{ toYaml .env | nindent 12 }}
+            {{ end }}
+            command:
+            {{ toYaml .command | nindent 12 }}
+{{- end -}}
+{{- end -}}
+{{- end -}}

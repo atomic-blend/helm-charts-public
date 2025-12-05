@@ -1,0 +1,726 @@
+manifest:
+  auth:
+    version: "0.12.0"
+  productivity:
+    version: "0.12.1"
+  mail:
+    version: "0.3.0"
+  mail-server:
+    version: "0.3.0"
+  task-app:
+    version: "0.13.1"
+  notes-app:
+    version: "0.4.1"
+  mail-app:
+    version: "0.3.0"
+
+services:
+  auth:
+    env: prod
+    deployment:
+      replicas: 3
+      image: ghcr.io/atomic-blend/auth
+      imagePullPolicy: IfNotPresent
+      imagePullSecrets: []
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: 8080
+        initialDelaySeconds: 60
+        periodSeconds: 30
+        timeoutSeconds: 10
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: 8080
+        initialDelaySeconds: 30
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+
+    service:
+      type: ClusterIP
+      ports:
+      - port: 80
+        targetPort: 8080
+        protocol: TCP
+        name: http
+      - port: 50051
+        targetPort: 50051
+        protocol: TCP
+        name: grpc
+
+    ingress:
+      enabled: true
+      annotations:
+        cert-manager.io/issuer: "letsencrypt-prod"
+        acme.cert-manager.io/http01-edit-in-place: "true"
+      ingressClassName: haproxy
+      hosts:
+      - host: api.atomic-blend.com
+        secretName: api-atomic-blend-com-tls
+      prefixPaths:
+      - auth
+      - users
+      - config
+      service: "auth"
+      port: 80
+
+    cm:
+      enabled: true
+      values:
+        AUTH_MAX_NB_USER: "100"
+        DATABASE_NAME: "ab-auth-prod"
+        PUBLIC_ADDRESS: "atomic-blend.com"
+        HTTPS: "true"
+        ACCOUNT_DOMAINS: "atomic-blend.com"
+        CORS_ALLOWED_ORIGINS: "https://task.atomic-blend.com,https://notes.atomic-blend.com,https://mail.atomic-blend.com"
+        CORS_ALLOWED_METHODS: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+        CORS_ALLOWED_HEADERS: "Content-Type,Authorization,X-Requested-With,Accept,Origin"
+        CORS_ALLOW_CREDENTIALS: "true"
+        AUTH_AMQP_PRODUCER_EXCHANGE_NAMES: mail
+        AUTH_AMQP_PRODUCER_QUEUE_NAME: sent_mail_queue
+        AUTH_AMQP_PRODUCER_ROUTING_KEYS: mail:sent
+
+    secrets:
+      enabled: false
+    sealedSecrets:
+      enabled: false
+
+  mail-app:
+    env: prod
+    deployment:
+      replicas: 1
+      image: ghcr.io/atomic-blend/mail-app
+      command:
+      - "nginx"
+      - "-g"
+      - "daemon off;"
+      - "-c"
+      - "/etc/nginx/conf.d/ab.conf"
+      imagePullPolicy: IfNotPresent
+      imagePullSecrets: []
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+      livenessProbe:
+        httpGet:
+          path: /
+          port: 80
+        initialDelaySeconds: 60
+        periodSeconds: 30
+        timeoutSeconds: 10
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /
+          port: 80
+        initialDelaySeconds: 30
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: mail-app-cm
+          items:
+          - key: NGINX_CONFIG
+            path: ab.conf
+      volumeMounts:
+      - name: nginx-config
+        mountPath: /etc/nginx/conf.d/ab.conf
+        subPath: ab.conf
+
+    service:
+      type: ClusterIP
+      ports:
+      - port: 80
+        targetPort: 80
+        protocol: TCP
+        name: http
+    cm:
+      enabled: true
+      values:
+        NGINX_CONFIG: |
+          events {}
+
+          http {
+              server {
+                  add_header Cross-Origin-Opener-Policy "same-origin";
+                  add_header Cross-Origin-Embedder-Policy "require-corp";
+
+                  listen       80;
+                  listen  [::]:80;
+                  server_name  localhost;
+
+                  root   /usr/share/nginx/html;
+                  index  index.html index.htm;
+
+                  location / {
+                      try_files $uri $uri/ /index.html;
+                  }
+
+                  location /pkg {
+                      add_header Cross-Origin-Resource-Policy "same-site";
+                      try_files $uri $uri/;
+                  }
+
+                  include /etc/nginx/mime.types;
+
+                  types {
+                      application/javascript mjs js;
+                  }
+
+                  error_page   500 502 503 504  /50x.html;
+                  location = /50x.html {
+                      root   /usr/share/nginx/html;
+                  }
+              }
+          }
+
+    ingress:
+      enabled: true
+      annotations:
+        cert-manager.io/issuer: "letsencrypt-prod"
+        acme.cert-manager.io/http01-edit-in-place: "true"
+      ingressClassName: haproxy
+      hosts:
+      - host: mail.atomic-blend.com
+        secretName: mail-atomic-blend-com-tls
+      prefixPaths:
+      - ""
+      service: "mail-app"
+      port: 80
+  mail-server:
+    env: prod
+    deployment:
+      replicas: 2
+      labels:
+        com.atomic-blend.egress-gw: "true"
+      image: ghcr.io/atomic-blend/mail-server
+      imagePullPolicy: IfNotPresent
+      imagePullSecrets: []
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      livenessProbe:
+        tcpSocket:
+          port: 1025
+        initialDelaySeconds: 60
+        periodSeconds: 30
+        timeoutSeconds: 10
+        failureThreshold: 3
+      readinessProbe:
+        tcpSocket:
+          port: 1025
+        initialDelaySeconds: 30
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+
+      volumes:
+      - name: mail-dkim-private-key
+        secret:
+          secretName: mail-dkim-private-key
+          items:
+          - key: key
+            path: dkim_private.pem
+            mode: 400
+
+      volumeMounts:
+      - name: mail-dkim-private-key
+        mountPath: /dkim_private.pem
+        subPath: dkim_private.pem
+        readOnly: true
+
+    service:
+      type: ClusterIP
+      ports:
+      - port: 1025
+        targetPort: 1025
+        protocol: TCP
+        name: smtp
+
+    ingress:
+      enabled: false
+      annotations:
+        cert-manager.io/issuer: "letsencrypt-prod"
+        acme.cert-manager.io/http01-edit-in-place: "true"
+        haproxy.org/path-type: "regex"
+        haproxy-ingress.github.io/path-type: "regex"
+      ingressClassName: haproxy
+      hosts:
+      - host: api.atomic-blend.com
+        secretName: api-atomic-blend-com-tls
+      prefixPaths:
+      - mail
+      service: "mail"
+      port: 80
+
+    tcpIngress:
+      enabled: true
+      tcplog: true
+      binds:
+      - name: smtp-bind
+        port: 25
+        accept_proxy: true
+      # - name: smtps-bind
+      #   port: 465
+      #   ssl: true
+      #   crt: mail-server-tcp-tls
+      service: "mail-server"
+      port: 1025
+      annotations:
+        haproxy.org/timeout-client: "300s" # 5 minutes
+        haproxy.org/timeout-server: "300s" # 5 minutes
+        haproxy.org/timeout-connect: "30s" # 30 secondes
+      certificate:
+        enabled: false
+        secretName: mail-server-tcp-tls
+        issuer: letsencrypt-prod
+        issuerKind: Issuer
+        dnsNames:
+        - mail-dev.atomic-blend.com
+        - smtp-dev.atomic-blend.com
+        duration: 2160h # 90 days
+        renewBefore: 360h # 15 days
+
+    cm:
+      enabled: true
+      values:
+        # DATABASE_NAME: "ab-prod"
+        MAIL_SERVER_AMQP_PRODUCER_EXCHANGE_NAMES: mail
+        MAIL_SERVER_AMQP_PRODUCER_QUEUE_NAME: received_mail_queue
+        MAIL_SERVER_AMQP_PRODUCER_ROUTING_KEYS: mail:received
+        MAIL_SERVER_AMQP_CONSUMER_EXCHANGE_NAMES: mail
+        MAIL_SERVER_AMQP_CONSUMER_QUEUE_NAME: sent_mail_queue
+        MAIL_SERVER_AMQP_CONSUMER_ROUTING_KEYS: mail:sent
+        MAIL_SERVER_AMQP_PRODUCER_RETRY_ENABLED: "true"
+        MAIL_SERVER_AMQP_PRODUCER_RETRY_EXCHANGE: mail
+        MAIL_SERVER_AMQP_PRODUCER_RETRY_ROUTING_KEY: sent
+        MAIL_SERVER_AMQP_PRODUCER_RETRY_QUEUE_NAME: retry_queue
+        MAIL_SERVER_AMQP_PRODUCER_RETRY_BINDING_KEY: send_retry
+        MAIL_HOST: "0.0.0.0"
+        MAIL_PORT: "1025"
+        DKIM_SELECTOR: "prod"
+        DKIM_PRIVATE_KEY_PATH: "/dkim_private.pem"
+
+    secrets:
+      enabled: false
+    sealedSecrets:
+      enabled: false
+
+  mail:
+    env: prod
+    deployment:
+      replicas: 2
+      image: ghcr.io/atomic-blend/mail
+      imagePullPolicy: IfNotPresent
+      imagePullSecrets: []
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: 8080
+        initialDelaySeconds: 60
+        periodSeconds: 30
+        timeoutSeconds: 10
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: 8080
+        initialDelaySeconds: 30
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      volumes:
+      - name: firebase-sac-volume
+        secret:
+          secretName: firebase-sac
+          items:
+          - key: firebase-sac.json
+            path: firebase-sac.json
+      volumeMounts:
+      - name: firebase-sac-volume
+        mountPath: "/secrets/firebase-sac.json"
+        subPath: firebase-sac.json
+
+    service:
+      type: ClusterIP
+      ports:
+      - port: 80
+        targetPort: 8080
+        protocol: TCP
+        name: http
+      - port: 50051
+        targetPort: 50051
+        protocol: TCP
+        name: grpc
+
+    ingress:
+      enabled: true
+      annotations:
+        cert-manager.io/issuer: "letsencrypt-prod"
+        acme.cert-manager.io/http01-edit-in-place: "true"
+        haproxy.org/path-type: "regex"
+        haproxy-ingress.github.io/path-type: "regex"
+      ingressClassName: haproxy
+      hosts:
+      - host: api.atomic-blend.com
+        secretName: api-atomic-blend-com-tls
+      prefixPaths:
+      - mail
+      service: "mail"
+      port: 80
+
+    cm:
+      enabled: true
+      values:
+        GOOGLE_APPLICATION_CREDENTIALS: "/secrets/firebase-sac.json"
+        FIREBASE_PROJECT_ID: "atomic-blend-prod"
+        DATABASE_NAME: "ab-mail-prod"
+        MAIL_AMQP_CONSUMER_EXCHANGE_NAMES: mail
+        MAIL_AMQP_CONSUMER_QUEUE_NAME: received_mail_queue
+        MAIL_AMQP_CONSUMER_ROUTING_KEYS: mail:received
+        MAIL_AMQP_PRODUCER_EXCHANGE_NAMES: mail
+        MAIL_AMQP_PRODUCER_QUEUE_NAME: sent_mail_queue
+        MAIL_AMQP_PRODUCER_ROUTING_KEYS: mail:sent
+        AWS_ENDPOINT: "https://s3.eu-central-003.backblazeb2.com"
+        AWS_BUCKET: "ab-files-prod"
+        AWS_DEFAULT_REGION: "eu-central-003"
+        AWS_USE_PATH_STYLE_ENDPOINT: "false"
+        RSPAMD_BASE_URL: "http://rspamd-ab-prod-rspamd:11333"
+        RSPAMD_TIMEOUT_SECONDS: "30"
+        RSPAMD_MAX_RETRIES: "3"
+        CORS_ALLOWED_ORIGINS: "https://mail.atomic-blend.com"
+        CORS_ALLOWED_METHODS: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+        CORS_ALLOWED_HEADERS: "Content-Type,Authorization,X-Requested-With,Accept,Origin"
+        CORS_ALLOW_CREDENTIALS: "true"
+
+    secrets:
+      enabled: false
+
+    sealedSecrets:
+      enabled: false
+  notes-app:
+    env: prod
+    deployment:
+      replicas: 1
+      image: ghcr.io/atomic-blend/notes-app
+      command:
+      - "nginx"
+      - "-g"
+      - "daemon off;"
+      - "-c"
+      - "/etc/nginx/conf.d/ab.conf"
+      imagePullPolicy: IfNotPresent
+      imagePullSecrets: []
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+      livenessProbe:
+        httpGet:
+          path: /
+          port: 80
+        initialDelaySeconds: 60
+        periodSeconds: 30
+        timeoutSeconds: 10
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /
+          port: 80
+        initialDelaySeconds: 30
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: notes-app-cm
+          items:
+          - key: NGINX_CONFIG
+            path: ab.conf
+      volumeMounts:
+      - name: nginx-config
+        mountPath: /etc/nginx/conf.d/ab.conf
+        subPath: ab.conf
+
+    service:
+      type: ClusterIP
+      ports:
+      - port: 80
+        targetPort: 80
+        protocol: TCP
+        name: http
+    cm:
+      enabled: true
+      values:
+        NGINX_CONFIG: |
+          events {}
+
+          http {
+              server {
+                  add_header Cross-Origin-Opener-Policy "same-origin";
+                  add_header Cross-Origin-Embedder-Policy "require-corp";
+
+                  listen       80;
+                  listen  [::]:80;
+                  server_name  localhost;
+
+                  root   /usr/share/nginx/html;
+                  index  index.html index.htm;
+
+                  location / {
+                      try_files $uri $uri/ /index.html;
+                  }
+
+                  location /pkg {
+                      add_header Cross-Origin-Resource-Policy "same-site";
+                      try_files $uri $uri/;
+                  }
+
+                  include /etc/nginx/mime.types;
+
+                  types {
+                      application/javascript mjs js;
+                  }
+
+                  error_page   500 502 503 504  /50x.html;
+                  location = /50x.html {
+                      root   /usr/share/nginx/html;
+                  }
+              }
+          }
+
+    ingress:
+      enabled: true
+      annotations:
+        cert-manager.io/issuer: "letsencrypt-prod"
+        acme.cert-manager.io/http01-edit-in-place: "true"
+      ingressClassName: haproxy
+      hosts:
+      - host: notes.atomic-blend.com
+        secretName: notes-atomic-blend-com-tls
+      prefixPaths:
+      - ""
+      service: "notes-app"
+      port: 80
+
+  productivity:
+    env: prod
+    deployment:
+      replicas: 2
+      image: ghcr.io/atomic-blend/productivity
+      imagePullPolicy: IfNotPresent
+      imagePullSecrets: []
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: 8080
+        initialDelaySeconds: 60
+        periodSeconds: 30
+        timeoutSeconds: 10
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: 8080
+        initialDelaySeconds: 30
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      volumes:
+      - name: firebase-sac-volume
+        secret:
+          secretName: firebase-sac
+          items:
+          - key: firebase-sac.json
+            path: firebase-sac.json
+      volumeMounts:
+      - name: firebase-sac-volume
+        mountPath: "/secrets/firebase-sac.json"
+        subPath: firebase-sac.json
+
+    service:
+      type: ClusterIP
+      ports:
+      - port: 80
+        targetPort: 8080
+        protocol: TCP
+        name: http
+      - port: 50051
+        targetPort: 50051
+        protocol: TCP
+        name: grpc
+
+    ingress:
+      enabled: true
+      annotations:
+        cert-manager.io/issuer: "letsencrypt-prod"
+        acme.cert-manager.io/http01-edit-in-place: "true"
+      ingressClassName: haproxy
+      hosts:
+      - host: api.atomic-blend.com
+        secretName: api-atomic-blend-com-tls
+      prefixPaths:
+      - tasks
+      - notes
+      - habits
+      - folders
+      - tags
+      - timeEntry
+      service: "productivity"
+      port: 80
+
+    cm:
+      enabled: true
+      values:
+        DATABASE_NAME: "ab-productivity-prod"
+        GOOGLE_APPLICATION_CREDENTIALS: "/secrets/firebase-sac.json"
+        FIREBASE_PROJECT_ID: "atomic-blend-prod"
+        CORS_ALLOWED_ORIGINS: "https://task.atomic-blend.com,https://notes.atomic-blend.com"
+        CORS_ALLOWED_METHODS: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+        CORS_ALLOWED_HEADERS: "Content-Type,Authorization,X-Requested-With,Accept,Origin"
+        CORS_ALLOW_CREDENTIALS: "true"
+
+    secrets:
+      enabled: false
+    sealedSecrets:
+      enabled: false
+
+  task-app:
+    env: prod
+    deployment:
+      replicas: 1
+      image: ghcr.io/atomic-blend/task-app
+      command:
+      - "nginx"
+      - "-g"
+      - "daemon off;"
+      - "-c"
+      - "/etc/nginx/conf.d/ab.conf"
+      imagePullPolicy: IfNotPresent
+      imagePullSecrets: []
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+      livenessProbe:
+        httpGet:
+          path: /
+          port: 80
+        initialDelaySeconds: 60
+        periodSeconds: 30
+        timeoutSeconds: 10
+        failureThreshold: 3
+      readinessProbe:
+        httpGet:
+          path: /
+          port: 80
+        initialDelaySeconds: 30
+        periodSeconds: 10
+        timeoutSeconds: 5
+        failureThreshold: 3
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: task-app-cm
+          items:
+          - key: NGINX_CONFIG
+            path: ab.conf
+      volumeMounts:
+      - name: nginx-config
+        mountPath: /etc/nginx/conf.d/ab.conf
+        subPath: ab.conf
+
+    service:
+      type: ClusterIP
+      ports:
+      - port: 80
+        targetPort: 80
+        protocol: TCP
+        name: http
+    cm:
+      enabled: true
+      values:
+        NGINX_CONFIG: |
+          events {}
+
+          http {
+              server {
+                  add_header Cross-Origin-Opener-Policy "same-origin";
+                  add_header Cross-Origin-Embedder-Policy "require-corp";
+
+                  listen       80;
+                  listen  [::]:80;
+                  server_name  localhost;
+
+                  root   /usr/share/nginx/html;
+                  index  index.html index.htm;
+
+                  location / {
+                      try_files $uri $uri/ /index.html;
+                  }
+
+                  location /pkg {
+                      add_header Cross-Origin-Resource-Policy "same-site";
+                      try_files $uri $uri/;
+                  }
+
+                  include /etc/nginx/mime.types;
+
+                  types {
+                      application/javascript mjs js;
+                  }
+
+                  error_page   500 502 503 504  /50x.html;
+                  location = /50x.html {
+                      root   /usr/share/nginx/html;
+                  }
+              }
+          }
+
+    ingress:
+      enabled: true
+      annotations:
+        cert-manager.io/issuer: "letsencrypt-prod"
+        acme.cert-manager.io/http01-edit-in-place: "true"
+      ingressClassName: haproxy
+      hosts:
+      - host: task.atomic-blend.com
+        secretName: task-atomic-blend-com-tls
+      prefixPaths:
+      - ""
+      service: "task-app"
+      port: 80

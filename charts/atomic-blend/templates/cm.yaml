@@ -1,0 +1,12 @@
+{{- range $serviceName, $serviceConfig := .Values.services }}
+{{- $root := $ }}
+{{- if ($serviceConfig.cm).enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $serviceName }}-cm
+data:
+  {{- tpl (toYaml $serviceConfig.cm.values) $root | nindent 2 }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,23 @@
+suite: Test ab-component PodDisruptionBudgets
+templates:
+  - pdb.yaml
+tests:
+  - it: should render a PDB for each service with pdb enabled
+    set:
+      services:
+        backend:
+          pdb:
+            enabled: true
+            maxUnavailable: 1
+      manifest:
+        backend:
+          version: "1.0.0"
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: metadata.name
+          value: backend
+      - equal:
+          path: spec.maxUnavailable
+          value: 1 

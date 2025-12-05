@@ -1,0 +1,42 @@
+suite: Test ab-component Ingresses
+templates:
+  - ingress.yaml
+tests:
+  - it: should render an Ingress for each service with ingress enabled
+    set:
+      services:
+        backend:
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            hosts:
+              - host: api.example.com
+                secretName: backend-tls
+            prefixPaths:
+              - ''
+            service: backend
+            port: 80
+      manifest:
+        backend:
+          version: "1.0.0"
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: metadata.name
+          value: backend
+      - equal:
+          path: spec.ingressClassName
+          value: nginx
+      - equal:
+          path: spec.tls[0].hosts[0]
+          value: api.example.com
+      - equal:
+          path: spec.tls[0].secretName
+          value: backend-tls
+      - equal:
+          path: spec.rules[0].host
+          value: api.example.com
+      - equal:
+          path: spec.rules[0].http.paths[0].path
+          value: / 

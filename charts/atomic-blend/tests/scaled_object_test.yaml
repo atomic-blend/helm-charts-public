@@ -1,0 +1,49 @@
+suite: Test ab-component ScaledObjects
+templates:
+  - scaled_object.yaml
+tests:
+  - it: should render a ScaledObject for each service with scaling enabled
+    set:
+      stackNamespace: dev
+      services:
+        backend:
+          scaling:
+            enabled: true
+            minReplicaCount: 1
+            maxReplicaCount: 10
+            cpu:
+              enabled: true
+              value: 80
+            memory:
+              enabled: true
+              value: 75
+      manifest:
+        backend:
+          version: "1.0.0"
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: metadata.name
+          value: backend
+      - equal:
+          path: metadata.namespace
+          value: dev
+      - equal:
+          path: spec.minReplicaCount
+          value: 1
+      - equal:
+          path: spec.maxReplicaCount
+          value: 10
+      - equal:
+          path: spec.triggers[0].type
+          value: cpu
+      - equal:
+          path: spec.triggers[0].metadata.value
+          value: "80"
+      - equal:
+          path: spec.triggers[1].type
+          value: memory
+      - equal:
+          path: spec.triggers[1].metadata.value
+          value: "75" 

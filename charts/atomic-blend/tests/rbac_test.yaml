@@ -1,0 +1,36 @@
+suite: Test ab-component RBAC
+templates:
+  - rbac.yaml
+tests:
+  - it: should render RBAC resources for each service with rbac enabled
+    set:
+      services:
+        backend:
+          rbac:
+            enabled: true
+            rules:
+              - apiGroups: [""]
+                resources: ["pods"]
+                verbs: ["get", "list"]
+      manifest:
+        backend:
+          version: "1.0.0"
+    asserts:
+      - hasDocuments:
+          count: 2
+      - equal:
+          path: metadata.name
+          value: backend-api
+        documentIndex: 0
+      - equal:
+          path: kind
+          value: ClusterRole
+        documentIndex: 0
+      - equal:
+          path: metadata.name
+          value: backend-rolebinding
+        documentIndex: 1
+      - equal:
+          path: kind
+          value: ClusterRoleBinding
+        documentIndex: 1 

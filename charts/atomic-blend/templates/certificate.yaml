@@ -1,0 +1,37 @@
+{{- range $serviceName, $serviceConfig := .Values.services }}
+{{- $root := $ }}
+{{ if and ($serviceConfig.tcpIngress).enabled ($serviceConfig.tcpIngress.certificate).enabled }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $serviceName }}-tcp-tls
+  labels:
+    {{- include "atomic-blend-component.labels" (dict "serviceName" $serviceName "Values" $root.Values "Chart" $root.Chart "Release" $root.Release) | nindent 4 }}
+spec:
+  secretName: {{ $serviceConfig.tcpIngress.certificate.secretName | default (printf "%s-tcp-tls" $serviceName) }}
+  issuerRef:
+    name: {{ $serviceConfig.tcpIngress.certificate.issuer | default "letsencrypt-prod" }}
+    kind: {{ $serviceConfig.tcpIngress.certificate.issuerKind | default "Issuer" }}
+  dnsNames:
+    {{- range $dnsName := $serviceConfig.tcpIngress.certificate.dnsNames }}
+    - {{ $dnsName }}
+    {{- end }}
+  {{- if $serviceConfig.tcpIngress.certificate.ipAddresses }}
+  ipAddresses:
+    {{- range $ipAddress := $serviceConfig.tcpIngress.certificate.ipAddresses }}
+    - {{ $ipAddress }}
+    {{- end }}
+  {{- end }}
+  {{- if $serviceConfig.tcpIngress.certificate.duration }}
+  duration: {{ $serviceConfig.tcpIngress.certificate.duration }}
+  {{- end }}
+  {{- if $serviceConfig.tcpIngress.certificate.renewBefore }}
+  renewBefore: {{ $serviceConfig.tcpIngress.certificate.renewBefore }}
+  {{- end }}
+  {{- if $serviceConfig.tcpIngress.certificate.keystores }}
+  keystores:
+    {{- toYaml $serviceConfig.tcpIngress.certificate.keystores | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end -}}

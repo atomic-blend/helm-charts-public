@@ -1,0 +1,123 @@
+{{- range $serviceName, $serviceConfig := .Values.services }}
+{{- $root := $ }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $serviceName }}
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: {{ $serviceConfig.deployment.replicas }}
+  selector:
+    matchLabels:
+      {{- include "atomic-blend-component.selectorLabels" (dict "serviceName" $serviceName "Values" $root.Values "Chart" $root.Chart "Release" $root.Release) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "atomic-blend-component.labels" (dict "serviceName" $serviceName "Values" $root.Values "Chart" $root.Chart "Release" $root.Release) | nindent 8 }}
+        {{- if $serviceConfig.deployment.labels }}
+        {{- toYaml $serviceConfig.deployment.labels | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- if $serviceConfig.deployment.nodeSelector }}
+      nodeSelector:
+        {{- toYaml $serviceConfig.deployment.nodeSelector | nindent 8 }}
+      {{- end }}
+      {{- if $serviceConfig.deployment.affinity }}
+      affinity:
+        {{- toYaml $serviceConfig.deployment.affinity | nindent 8 }}
+      {{- end }}
+      {{- if $serviceConfig.deployment.volumes }}
+      volumes:
+        {{- toYaml $serviceConfig.deployment.volumes | nindent 8 }}
+      {{- end }}
+      {{- if or (or ($serviceConfig.serviceaccount).enabled ($serviceConfig.rbac).enabled) ($serviceConfig.rbac).enableAdminRbac }}
+      serviceAccountName: {{ $serviceName }}-sac
+      {{- end }}
+      containers:
+        - image: {{ $serviceConfig.deployment.image }}:{{ (index $root.Values.manifest $serviceName).version }}
+          {{ if $serviceConfig.deployment.command -}}
+          command:
+            {{ toYaml $serviceConfig.deployment.command | nindent 12 }}
+          {{ end }}
+          {{ if or ($serviceConfig.cm).enabled ($serviceConfig.secrets).enabled -}}
+          envFrom:
+            {{- if ($serviceConfig.cm).enabled }}
+            - configMapRef:
+                name: {{ $serviceName }}-cm
+            {{- end }}
+          {{- end }}
+          # security context
+          {{- if $serviceConfig.deployment.securityContext }}
+          securityContext:
+            {{- toYaml $serviceConfig.deployment.securityContext | nindent 12 }}
+          {{- end }}
+          
+          env:
+            - name: "ENV"
+              value: {{ $serviceConfig.env }}
+            {{- if ($serviceConfig.secrets).enabled }}
+            {{- range $envName, $secretInfo := $serviceConfig.secrets.values }}
+            - name: {{ $envName }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretInfo.secretName }}
+                  key: {{ $secretInfo.key }}
+            {{- end }}
+            {{- end }}
+            {{- if $serviceConfig.deployment.env }}
+            {{- toYaml $serviceConfig.deployment.env | nindent 12 }}
+            {{- end }}
+          {{- if $serviceConfig.deployment.volumeMounts }}
+          volumeMounts:
+            {{ toYaml $serviceConfig.deployment.volumeMounts | nindent 12 }}
+          {{- end }}
+          {{ if $serviceConfig.deployment.imagePullPolicy }}
+          imagePullPolicy: {{ $serviceConfig.deployment.imagePullPolicy }}
+          {{ else }}
+          imagePullPolicy: IfNotPresent
+          {{ end -}}
+          livenessProbe:
+            {{- toYaml $serviceConfig.deployment.livenessProbe | nindent 12 }}
+          {{- if or $serviceConfig.deployment.requests $serviceConfig.deployment.limits }}
+          resources:
+            {{- if $serviceConfig.deployment.requests }}
+            requests:
+              {{- toYaml $serviceConfig.deployment.requests | nindent 14 }}
+            {{- end }}
+            {{- if $serviceConfig.deployment.limits }}
+            limits:
+              {{- toYaml $serviceConfig.deployment.limits | nindent 14 }}
+            {{- end }}
+          {{- end }}
+          name: {{ $serviceName }}
+      imagePullSecrets:
+        {{- toYaml $serviceConfig.deployment.imagePullSecrets | nindent 8 }}
+      {{- if $serviceConfig.deployment.initContainers }}
+      initContainers:
+        {{- $initContainersManifest := $root.Values.initContainersManifest -}}
+        {{- $enabledCm := ($serviceConfig.cm).enabled -}}
+        {{- $enabledSecret := ($serviceConfig.secrets).enabled -}}
+        {{ range $serviceConfig.deployment.initContainers }}
+        - name: {{ .name }}
+          image: {{ .image }}:{{ (index $initContainersManifest .name).version }}
+          imagePullPolicy: IfNotPresent
+          {{ if or $enabledCm $enabledSecret }}
+          envFrom:
+            {{- if $enabledCm }}
+            - configMapRef:
+                name: {{ $serviceName }}-cm
+            {{- end }}
+            {{- if $enabledSecret }}
+            - secretRef:
+                name: {{ $serviceName }}-secret
+            {{- end }}
+          {{ end }}
+      {{- end -}}
+  {{- end }}
+  {{ if $serviceConfig.deployment.strategy }}
+  strategy:
+    {{- toYaml $serviceConfig.deployment.strategy | nindent 4 }}
+  {{- end }}
+{{- end }}

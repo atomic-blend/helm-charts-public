@@ -1,0 +1,38 @@
+{{- range $serviceName, $serviceConfig := .Values.services }}
+{{- $root := $ }}
+{{- if ($serviceConfig.hpa).enabled }}
+---
+apiVersion: autoscaling/v2beta2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $serviceName }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $serviceName }}
+  minReplicas: {{ $serviceConfig.hpa.minReplicas }}
+  maxReplicas: {{ $serviceConfig.hpa.maxReplicas }}
+  metrics:
+    {{- if ($serviceConfig.hpa.memory).averageUtilization }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ $serviceConfig.hpa.memory.averageUtilization }}
+    {{- end }}
+    {{- if ($serviceConfig.hpa.cpu).averageUtilization }}
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $serviceConfig.hpa.cpu.averageUtilization }}
+    {{- end }}
+  {{- if ($serviceConfig.hpa).behavior }}
+  behavior:
+    {{- toYaml ($serviceConfig.hpa).behavior | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end }}

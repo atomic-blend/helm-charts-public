@@ -1,0 +1,30 @@
+name: "test-helm-chart"
+description: "A GitHub Action to build and test Helm charts."
+author: "atomic-blend"
+
+inputs:
+  chart_path:
+    description: "The path to the Helm chart to be tested."
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+  - uses: azure/setup-helm@v4.3.0
+    # with:
+    #   version: '<version>' # default is latest (stable)
+    id: install
+  - shell: bash
+    name: "Install helm unittest plugin"
+    run: |
+      helm version
+      helm plugin install https://github.com/helm-unittest/helm-unittest.git --verify=false 2>/dev/null || echo "helm unittest plugin already installed"
+  - shell: bash
+    name: "Lint"
+    run: |
+      echo "Building and testing Helm chart located at ${{ inputs.chart_path }}"
+      helm lint "${{ inputs.chart_path }}"
+  - shell: bash
+    name: "Run Unit Tests"
+    run: |
+      helm unittest "${{ inputs.chart_path }}"
