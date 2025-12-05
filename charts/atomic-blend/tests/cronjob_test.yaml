@@ -1,0 +1,39 @@
+suite: Test ab-component CronJobs
+templates:
+- cronjob.yaml
+tests:
+- it: should render a CronJob for each configured cronjob
+  set:
+    services:
+      backend:
+        deployment: {}
+        cronjob:
+        - name: cleanup
+          schedule: "0 3 * * *"
+          concurrencyPolicy: Forbid
+          successfulJobsHistoryLimit: 3
+          failedJobsHistoryLimit: 1
+          image: ghcr.io/atomic-blend/cron
+          imagePullPolicy: "IfNotPresent"
+          imagePullSecrets: []
+          restartPolicy: OnFailure
+          terminationGracePeriodSeconds: 30
+          command:
+          - "/bin/sh"
+          - "-c"
+          - "echo cleanup"
+    manifest:
+      backend:
+        version: "1.0.0"
+  asserts:
+  - hasDocuments:
+      count: 1
+  - equal:
+      path: metadata.name
+      value: backend-cleanup
+  - equal:
+      path: spec.jobTemplate.spec.template.spec.containers[0].name
+      value: backend-cleanup
+  - equal:
+      path: spec.jobTemplate.spec.template.spec.containers[0].image
+      value: ghcr.io/atomic-blend/cron:1.0.0

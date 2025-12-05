@@ -11,7 +11,7 @@ kind: CronJob
 metadata:
   name: {{ $serviceName }}-{{ .name }}
 spec:
-  schedule: {{ .schedule }}
+  schedule: {{ quote .schedule }}
   concurrencyPolicy: {{ .concurrencyPolicy }}
   successfulJobsHistoryLimit: {{ .successfulJobsHistoryLimit }}
   failedJobsHistoryLimit: {{ .failedJobsHistoryLimit }}
@@ -24,7 +24,7 @@ spec:
             {{- toYaml $nodeSelector | nindent 10 }}
           {{- end }}
           imagePullSecrets:
-            {{- toYaml .imagePullSecrets | nindent 10 }}
+            {{ toYaml .imagePullSecrets | nindent 12 }}
           restartPolicy: {{ .restartPolicy }}
           terminationGracePeriodSeconds: {{ .terminationGracePeriodSeconds }}
           containers:
@@ -47,7 +47,7 @@ spec:
               {{ toYaml .env | nindent 12 }}
             {{ end }}
             command:
-            {{- toYaml .command | nindent 12}}
+            {{ toYaml .command | nindent 12 }}
 {{- end -}}
 {{- end -}}
 {{- end -}}

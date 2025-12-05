@@ -1,0 +1,33 @@
+
+
+
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backend-cleanup
+spec:
+  schedule: "0 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          imagePullSecrets:
+            
+            []
+          restartPolicy: OnFailure
+          terminationGracePeriodSeconds: 30
+          containers:
+          - name: backend-cleanup
+            image: ghcr.io/atomic-blend/cron:1.0.0
+            imagePullPolicy: IfNotPresent
+            
+            command:
+            
+            - /bin/sh
+            - -c
+            - echo cleanup

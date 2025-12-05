@@ -10,6 +10,10 @@ inputs:
 runs:
   using: "composite"
   steps:
+  - uses: azure/setup-helm@v4.3.0
+    # with:
+    #   version: '<version>' # default is latest (stable)
+    id: install
   - shell: bash
     name: "Build and test Helm chart"
     run: |

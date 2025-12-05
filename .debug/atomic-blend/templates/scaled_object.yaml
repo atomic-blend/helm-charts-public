@@ -1,0 +1,24 @@
+
+
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: backend
+  namespace: dev
+spec:
+  scaleTargetRef:
+    name: backend
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  triggers:
+    
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "80"  # Target average CPU utilization percentage
+    
+    - type: memory
+      metricType: Utilization
+      metadata:
+        value: "75"  # Target average memory utilization percentage

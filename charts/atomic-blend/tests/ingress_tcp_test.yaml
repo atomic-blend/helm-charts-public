@@ -1,0 +1,58 @@
+suite: Test ab-component TCP Ingresses
+templates:
+- ingress_tcp.yaml
+tests:
+- it: should render a TCP Ingress for each service with tcpIngress enabled
+  set:
+    services:
+      backend:
+        tcpIngress:
+          enabled: true
+          tcplog: true
+          binds:
+          - name: tcp-bind
+            port: 8080
+            accept_proxy: true
+          service: backend
+          port: 80
+          annotations:
+            haproxy.org/timeout-client: "30s"
+    manifest:
+      backend:
+        version: "1.0.0"
+  asserts:
+  - hasDocuments:
+      count: 1
+  - equal:
+      path: metadata.name
+      value: backend-tcp
+  - equal:
+      path: metadata.annotations["ingress.class"]
+      value: haproxy
+  - equal:
+      path: metadata.annotations["haproxy.org/timeout-client"]
+      value: "30s"
+  - equal:
+      path: spec[0].name
+      value: backend-tcp
+  - equal:
+      path: spec[0].frontend.name
+      value: backend-frontend
+  - equal:
+      path: spec[0].frontend.tcplog
+      value: true
+  - equal:
+      path: spec[0].frontend.binds[0].name
+      value: tcp-bind
+  - equal:
+      path: spec[0].frontend.binds[0].port
+      value: 8080
+  - equal:
+      path: spec[0].frontend.binds[0].accept_proxy
+      value: true
+  - equal:
+      path: spec[0].service.name
+      value: backend
+  - equal:
+      path: spec[0].service.port
+      value: 80
