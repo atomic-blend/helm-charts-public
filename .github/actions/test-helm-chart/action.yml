@@ -15,7 +15,16 @@ runs:
     #   version: '<version>' # default is latest (stable)
     id: install
   - shell: bash
-    name: "Build and test Helm chart"
+    name: "Install helm unittest plugin"
+    run: |
+      helm version
+      helm plugin install https://github.com/helm-unittest/helm-unittest.git --verify=false
+  - shell: bash
+    name: "Lint"
     run: |
       echo "Building and testing Helm chart located at ${{ inputs.chart_path }}"
       helm lint "${{ inputs.chart_path }}"
+  - shell: bash
+    name: "Run Unit Tests"
+    run: |
+      helm unittest "${{ inputs.chart_path }}"
