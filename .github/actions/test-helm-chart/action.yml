@@ -1,0 +1,17 @@
+name: "test-helm-chart"
+description: "A GitHub Action to build and test Helm charts."
+author: "atomic-blend"
+
+inputs:
+  chart_path:
+    description: "The path to the Helm chart to be tested."
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+  - shell: bash
+    name: "Build and test Helm chart"
+    run: |
+      echo "Building and testing Helm chart located at ${{ inputs.chart_path }}"
+      helm lint "${{ inputs.chart_path }}"

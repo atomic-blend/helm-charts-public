@@ -322,7 +322,7 @@ services:
       enabled: false
     sealedSecrets:
       enabled: false
-  
+
   mail:
     env: prod
     deployment:
