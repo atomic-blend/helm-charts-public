@@ -18,7 +18,7 @@ runs:
     name: "Install helm unittest plugin"
     run: |
       helm version
-      helm plugin install https://github.com/helm-unittest/helm-unittest.git --verify=false
+      helm plugin install https://github.com/helm-unittest/helm-unittest.git --verify=false 2>/dev/null || echo "helm unittest plugin already installed"
   - shell: bash
     name: "Lint"
     run: |
